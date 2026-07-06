@@ -83,12 +83,20 @@ def parse_services_offered(section: str) -> list[dict[str, str]]:
             bullets = []
             continue
 
+        if service_name is None:
+            raise ValueError(f"Unexpected text before any service is defined: {line}")
+
         if line.startswith("-"):
             bullets.append(normalize_space(line[1:]))
             continue
 
         if bullets:
             bullets[-1] = normalize_space(f"{bullets[-1]} {line}")
+        else:
+            raise ValueError(
+                f"Unexpected text before first bullet point in service '{service_name}': "
+                f"{line}"
+            )
 
     append_current_service()
 
