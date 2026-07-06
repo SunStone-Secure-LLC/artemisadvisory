@@ -177,22 +177,24 @@ def parse_services_offered(metadata: dict[str, Any]) -> list[dict[str, str]]:
                 "must include a non-empty serviceName"
             )
 
-        service: dict[str, str] = {"serviceName": normalize_space(service_name)}
         service_description = item.get("serviceDescription", item.get("description"))
-        if service_description is not None:
-            if (
-                not isinstance(service_description, str)
-                or not service_description.strip()
-            ):
-                raise ValueError(
-                    f"README.md metadata field 'servicesOffered' item {index} "
-                    "description must be a non-empty string"
-                )
-            service["serviceDescription"] = normalize_service_description(
-                service_description
+        if (
+            not isinstance(service_description, str)
+            or not service_description.strip()
+        ):
+            raise ValueError(
+                f"README.md metadata field 'servicesOffered' item {index} "
+                "must include a non-empty serviceDescription or description"
             )
 
-        services.append(service)
+        services.append(
+            {
+                "serviceName": normalize_space(service_name),
+                "serviceDescription": normalize_service_description(
+                    service_description
+                ),
+            }
+        )
 
     return services
 
