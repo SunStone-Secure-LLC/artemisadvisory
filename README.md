@@ -1,2 +1,2 @@
-# artemisadvisory
-SunStone Secure provides Aretmis agentic compliance advisory services.
+# SunStone Secure Artemis Advisory
+SunStone Secure provides Artemis agentic-powered compliance and advisory services.
