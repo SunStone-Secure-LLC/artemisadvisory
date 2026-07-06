@@ -7,16 +7,17 @@ import argparse
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 
-COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
-HEADING_RE = re.compile(r"^##\s+(?P<title>.+?)\s*$", re.MULTILINE)
-
-SERVICE_DESCRIPTION_SECTION = "General description of the consulting or advisory service"
-CONTACT_INFORMATION_SECTION = "Contact information"
-SERVICES_OFFERED_SECTION = "Types of consulting or advisory services offered"
-CUSTOMER_REFERENCES_SECTION = (
-    "Optional: Positive attestations from customers or customer references"
+METADATA_RE = re.compile(
+    r"<!--\s*20x-MKT-CAS-WEB-(?P<key>[A-Za-z]+):\s*(?P<value>.*?)\s*-->",
+    re.DOTALL,
+)
+REQUIRED_METADATA_FIELDS = (
+    "serviceDescription",
+    "contactInformation",
+    "servicesOffered",
 )
 
 
@@ -24,105 +25,192 @@ def normalize_space(value: str) -> str:
     return " ".join(value.split())
 
 
-def read_sections(markdown: str) -> dict[str, str]:
-    visible_markdown = COMMENT_RE.sub("", markdown)
-    matches = list(HEADING_RE.finditer(visible_markdown))
-    sections: dict[str, str] = {}
+def quote_unquoted_object_keys(value: str) -> str:
+    result: list[str] = []
+    index = 0
+    in_string = False
+    escaped = False
 
-    for index, match in enumerate(matches):
-        start = match.end()
-        end = (
-            matches[index + 1].start()
-            if index + 1 < len(matches)
-            else len(visible_markdown)
+    while index < len(value):
+        char = value[index]
+
+        if in_string:
+            result.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+
+        if char == '"':
+            in_string = True
+            result.append(char)
+            index += 1
+            continue
+
+        if char not in "{,":
+            result.append(char)
+            index += 1
+            continue
+
+        result.append(char)
+        index += 1
+
+        while index < len(value) and value[index].isspace():
+            result.append(value[index])
+            index += 1
+
+        key_start = index
+        if index < len(value) and (value[index].isalpha() or value[index] == "_"):
+            index += 1
+            while index < len(value) and (
+                value[index].isalnum() or value[index] == "_"
+            ):
+                index += 1
+
+            lookahead = index
+            while lookahead < len(value) and value[lookahead].isspace():
+                lookahead += 1
+
+            if lookahead < len(value) and value[lookahead] == ":":
+                result.append(f'"{value[key_start:index]}"')
+                result.extend(value[index:lookahead])
+                result.append(":")
+                index = lookahead + 1
+                continue
+
+        result.extend(value[key_start:index])
+
+    return "".join(result)
+
+
+def parse_metadata_value(key: str, raw_value: str) -> Any:
+    normalized_value = quote_unquoted_object_keys(raw_value.strip())
+    try:
+        return json.loads(normalized_value)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"README.md metadata field '{key}' is not valid JSON") from error
+
+
+def read_metadata(markdown: str) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+
+    for match in METADATA_RE.finditer(markdown):
+        key = match.group("key")
+        if key in metadata:
+            raise ValueError(f"README.md contains duplicate metadata field: {key}")
+        metadata[key] = parse_metadata_value(key, match.group("value"))
+
+    missing_fields = [key for key in REQUIRED_METADATA_FIELDS if key not in metadata]
+    if missing_fields:
+        raise ValueError(
+            "README.md is missing required metadata field(s): "
+            + ", ".join(missing_fields)
         )
-        sections[match.group("title").strip()] = visible_markdown[start:end].strip()
 
-    return sections
-
-
-def require_section(sections: dict[str, str], title: str) -> str:
-    section = sections.get(title, "").strip()
-    if not section:
-        raise ValueError(f"README.md is missing required section: {title}")
-    return section
+    return metadata
 
 
-def parse_contact_information(section: str) -> list[str]:
-    contacts = [normalize_space(line) for line in section.splitlines() if line.strip()]
-    if not contacts:
-        raise ValueError("README.md contact information section did not contain any contacts")
-    return contacts
+def require_string(metadata: dict[str, Any], key: str) -> str:
+    value = metadata.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"README.md metadata field '{key}' must be a non-empty string")
+    return normalize_space(value)
 
 
-def parse_services_offered(section: str) -> list[dict[str, str]]:
-    services: list[dict[str, str]] = []
-    service_name: str | None = None
-    bullets: list[str] = []
-
-    def append_current_service() -> None:
-        if service_name is None:
-            return
-        if not bullets:
-            raise ValueError(f"Service '{service_name}' does not include a description")
-        services.append(
-            {
-                "serviceName": service_name,
-                "serviceDescription": " ".join(bullets),
-            }
+def require_string_list(metadata: dict[str, Any], key: str) -> list[str]:
+    value = metadata.get(key)
+    if not isinstance(value, list) or not value:
+        raise ValueError(
+            f"README.md metadata field '{key}' must be a non-empty string array"
         )
 
-    for raw_line in section.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-
-        if line.endswith(":") and not line.startswith("-"):
-            append_current_service()
-            service_name = line[:-1].strip()
-            bullets = []
-            continue
-
-        if service_name is None:
-            raise ValueError(f"Unexpected text before any service is defined: {line}")
-
-        if line.startswith("-"):
-            bullets.append(normalize_space(line[1:]))
-            continue
-
-        if bullets:
-            bullets[-1] = normalize_space(f"{bullets[-1]} {line}")
-        else:
+    strings: list[str] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
             raise ValueError(
-                f"Unexpected text before first bullet point in service '{service_name}': "
-                f"{line}"
+                f"README.md metadata field '{key}' item {index} must be "
+                "a non-empty string"
+            )
+        strings.append(normalize_space(item))
+
+    return strings
+
+
+def normalize_service_description(value: str) -> str:
+    return normalize_space(" ".join(part.strip() for part in value.split("|")))
+
+
+def parse_services_offered(metadata: dict[str, Any]) -> list[dict[str, str]]:
+    value = metadata.get("servicesOffered")
+    if not isinstance(value, list) or not value:
+        raise ValueError(
+            "README.md metadata field 'servicesOffered' must be a non-empty array"
+        )
+
+    services: list[dict[str, str]] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"README.md metadata field 'servicesOffered' item {index} "
+                "must be an object"
             )
 
-    append_current_service()
+        unexpected_keys = set(item) - {
+            "serviceName",
+            "description",
+            "serviceDescription",
+        }
+        if unexpected_keys:
+            raise ValueError(
+                f"README.md metadata field 'servicesOffered' item {index} "
+                f"has unexpected key(s): {', '.join(sorted(unexpected_keys))}"
+            )
 
-    if not services:
-        raise ValueError("README.md services offered section did not contain any services")
+        service_name = item.get("serviceName")
+        if not isinstance(service_name, str) or not service_name.strip():
+            raise ValueError(
+                f"README.md metadata field 'servicesOffered' item {index} "
+                "must include a non-empty serviceName"
+            )
+
+        service: dict[str, str] = {"serviceName": normalize_space(service_name)}
+        service_description = item.get("serviceDescription", item.get("description"))
+        if service_description is not None:
+            if (
+                not isinstance(service_description, str)
+                or not service_description.strip()
+            ):
+                raise ValueError(
+                    f"README.md metadata field 'servicesOffered' item {index} "
+                    "description must be a non-empty string"
+                )
+            service["serviceDescription"] = normalize_service_description(
+                service_description
+            )
+
+        services.append(service)
+
     return services
 
 
 def build_advisor_information(readme_path: Path) -> dict[str, object]:
-    sections = read_sections(readme_path.read_text(encoding="utf-8"))
+    metadata = read_metadata(readme_path.read_text(encoding="utf-8"))
 
     document: dict[str, object] = {
-        "serviceDescription": normalize_space(
-            require_section(sections, SERVICE_DESCRIPTION_SECTION)
-        ),
-        "contactInformation": parse_contact_information(
-            require_section(sections, CONTACT_INFORMATION_SECTION)
-        ),
-        "servicesOffered": parse_services_offered(
-            require_section(sections, SERVICES_OFFERED_SECTION)
-        ),
+        "serviceDescription": require_string(metadata, "serviceDescription"),
+        "contactInformation": require_string_list(metadata, "contactInformation"),
+        "servicesOffered": parse_services_offered(metadata),
     }
 
-    customer_references = normalize_space(sections.get(CUSTOMER_REFERENCES_SECTION, ""))
-    if customer_references:
-        document["customerReferences"] = [customer_references]
+    if "customerReferences" in metadata:
+        document["customerReferences"] = require_string_list(
+            metadata,
+            "customerReferences",
+        )
 
     return document
 

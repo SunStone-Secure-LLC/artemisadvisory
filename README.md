@@ -41,6 +41,8 @@ The machine-readable FedRAMP Advisor Information JSON is published as a GitHub R
 
 https://github.com/SunStone-Secure-LLC/artemisadvisory/releases/download/fedramp-advisor-information/fedramp-advisor-information.json
 
+The release workflow builds this JSON from the `20x-MKT-CAS-WEB-*` HTML comment metadata in this README.
+
 ### Manual download
 
 Open the release page and download `fedramp-advisor-information.json`:
