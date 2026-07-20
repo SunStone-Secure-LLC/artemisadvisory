@@ -104,3 +104,58 @@ jobs:
             echo "FedRAMP Advisor Information JSON published:"
             echo "$PUBLIC_ASSET_URL"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-pages:
+    name: Deploy released JSON to GitHub Pages
+    needs: publish
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+
+    concurrency:
+      group: github-pages
+      cancel-in-progress: true
+
+    environment:
+      name: github-pages
+      url: ${{ format('{0}fedramp-advisor-information.json', steps.deployment.outputs.page_url) }}
+
+    steps:
+      - name: Download release asset into site directory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p _site
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "fedramp-advisor-information.json" \
+            --dir _site
+
+      - name: Validate downloaded JSON
+        run: jq empty _site/fedramp-advisor-information.json
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Add GitHub Pages URL to job summary
+        env:
+          PAGES_ASSET_URL: ${{ format('{0}fedramp-advisor-information.json', steps.deployment.outputs.page_url) }}
+        run: |
+          {
+            echo "FedRAMP Advisor Information JSON deployed to GitHub Pages:"
+            echo "$PAGES_ASSET_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
