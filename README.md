@@ -1,6 +1,16 @@
 # SunStone Secure Artemis FedRAMP Advisor Information (MKT-CAS-WEB)
 
+![SunStone Secure](assets/sunstone-logo.svg)
+
 SunStone Secure provides Artemis Agent AI-native compliance and advisory services.
+
+## Advisor name
+
+SunStone Secure
+
+## Logo
+
+https://sunstone-secure-llc.github.io/artemisadvisory/sunstone-logo.svg
 
 ## General description of the consulting or advisory service
 
@@ -42,7 +52,11 @@ The machine-readable FedRAMP Advisor Information JSON is published as a GitHub R
 
 https://github.com/SunStone-Secure-LLC/artemisadvisory/releases/download/fedramp-advisor-information/fedramp-advisor-information.json
 
-The release workflow builds this JSON from the `20x-MKT-CAS-WEB-*` HTML comment metadata in this README.
+The same JSON is also served from GitHub Pages:
+
+https://sunstone-secure-llc.github.io/artemisadvisory/fedramp-advisor-information.json
+
+The release workflow builds this JSON from the `20x-MKT-CAS-WEB-*` HTML comment metadata in this README and validates it against schema version 1.0.1 (`fedramp-advisor-information-schema-2026-06-24.json`). The advisor logo referenced by the JSON is `assets/sunstone-logo.svg`, deployed to GitHub Pages alongside the JSON.
 
 ### Manual download
 
@@ -119,6 +133,8 @@ gh attestation verify fedramp-advisor-information.json \
   --signer-workflow SunStone-Secure-LLC/artemisadvisory/.github/workflows/publish-fedramp-advisor-information.yml
 ```
 
+<!-- 20x-MKT-CAS-WEB-advisorName: "SunStone Secure" -->
+<!-- 20x-MKT-CAS-WEB-logo: "https://sunstone-secure-llc.github.io/artemisadvisory/sunstone-logo.svg" -->
 <!-- 20x-MKT-CAS-WEB-serviceDescription: "SunStone Secure has been providing FedRAMP and other regulated security and compliance advisory services, including CISO-as-a-Serice and ConMon-as-a-Service offerrings since 2019." -->
 <!-- 20x-MKT-CAS-WEB-contactInformation: ["Mats Nahlinder|info@sunstonesecure.com","Security Team|security@sunstonesecure.com","General|(650)508-1796"] -->
 <!-- 20x-MKT-CAS-WEB-servicesOffered: [{serviceName:"20x",description:"AI-native and Agentic SaaS capabilities for continuous threat assessment, audit readiness and compliance operations."},{serviceName:"Rev5",description:"AI-native and Agentic SaaS capabilities for continuous threat assessment, audit readiness, and compliance operations.|Rev 5 SSP and appendices automation.|Rev 5 SAP and SRTM automation.|Rev 5 interview preparation automation.|Rev 5 ConMon automation.|Rev 5 red teaming automation."}] -->
