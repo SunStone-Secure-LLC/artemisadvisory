@@ -4,6 +4,8 @@
 
 SunStone Secure provides Artemis Agent AI-native compliance and advisory services.
 
+**Machine-readable FedRAMP Advisor Information (JSON):** https://sunstone-secure-llc.github.io/artemisadvisory/fedramp-advisor-information.json
+
 ## Advisor name
 
 SunStone Secure
