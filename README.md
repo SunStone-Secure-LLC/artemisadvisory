@@ -53,6 +53,10 @@ https://sunstone-secure-llc.github.io/artemisadvisory/fedramp-advisor-informatio
 
 The release workflow builds this JSON from the `20x-MKT-CAS-WEB-*` HTML comment metadata in this README and validates it against schema version 1.0.1 (`fedramp-advisor-information-schema-2026-06-24.json`). The advisor logo referenced by the JSON is `assets/sunstone-logo.svg`, deployed to GitHub Pages alongside the JSON.
 
+### Schema change monitoring
+
+The `Watch FedRAMP Schema CHANGELOG` workflow runs daily. It reads the [FedRAMP schemas CHANGELOG](https://github.com/FedRAMP/schemas/blob/main/CHANGELOG.md) and files a GitHub issue (label `fedramp-schema-watch`, assigned to `sunstonesecure-robert`) for every new entry that affects a `fedramp-advisor-information-schema*` file. Each issue carries the CHANGELOG text and links to the schema; re-run the publish workflow to validate the JSON against the new version. The check can be exercised without filing issues via `workflow_dispatch` with `dry_run` enabled.
+
 ### Manual download
 
 Open the release page and download `fedramp-advisor-information.json`:
