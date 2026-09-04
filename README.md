@@ -1,6 +1,6 @@
 # SunStone Secure Artemis FedRAMP Advisor Information (MKT-CAS-WEB)
 
-![SunStone Secure](assets/sunstone-logo.svg)
+<img src="assets/sunstone-logo.svg" alt="SunStone Secure" width="180">
 
 SunStone Secure provides Artemis Agent AI-native compliance and advisory services.
 
