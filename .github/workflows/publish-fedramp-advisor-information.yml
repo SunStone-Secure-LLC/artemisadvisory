@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - README.md
+      - assets/**
       - scripts/build_fedramp_advisor_information.py
       - .github/workflows/publish-fedramp-advisor-information.yml
   workflow_dispatch:
@@ -17,6 +18,7 @@ permissions:
 
 env:
   ADVISOR_JSON: dist/fedramp-advisor-information.json
+  LOGO_FILE: assets/sunstone-logo.svg
   PUBLIC_ASSET_URL: https://github.com/${{ github.repository }}/releases/download/fedramp-advisor-information/fedramp-advisor-information.json
   RELEASE_TAG: fedramp-advisor-information
   RELEASE_TITLE: FedRAMP Advisor Information
@@ -40,7 +42,7 @@ jobs:
         run: python scripts/build_fedramp_advisor_information.py --output "$ADVISOR_JSON"
 
       - name: Install JSON Schema validator
-        run: python -m pip install --disable-pip-version-check jsonschema
+        run: python -m pip install --disable-pip-version-check jsonschema referencing
 
       - name: Validate JSON against FedRAMP schema
         shell: python
@@ -51,18 +53,35 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          from jsonschema import validators
+          from jsonschema import FormatChecker, validators
+          from referencing import Registry, Resource
 
           schema_url = os.environ["SCHEMA_URL"]
           json_path = Path(os.environ["ADVISOR_JSON"])
 
-          with urllib.request.urlopen(schema_url) as response:
-              schema = json.load(response)
+          def fetch_json(url):
+              with urllib.request.urlopen(url) as response:
+                  return json.load(response)
+
+          def retrieve(uri):
+              # The advisor schema $refs the shared fedramp-common-definitions schema.
+              if not uri.startswith("https://fedramp.gov/") and not uri.startswith(
+                  "https://www.fedramp.gov/"
+              ):
+                  raise ValueError(f"Refusing to retrieve non-FedRAMP reference: {uri}")
+              print(f"Retrieving referenced schema: {uri}")
+              return Resource.from_contents(fetch_json(uri))
+
+          schema = fetch_json(schema_url)
 
           data = json.loads(json_path.read_text(encoding="utf-8"))
           Validator = validators.validator_for(schema)
           Validator.check_schema(schema)
-          validator = Validator(schema)
+          validator = Validator(
+              schema,
+              registry=Registry(retrieve=retrieve),
+              format_checker=FormatChecker(),
+          )
           errors = sorted(validator.iter_errors(data), key=lambda error: error.json_path)
 
           if errors:
@@ -124,6 +143,9 @@ jobs:
       url: ${{ format('{0}fedramp-advisor-information.json', steps.deployment.outputs.page_url) }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Download release asset into site directory
         env:
           GH_TOKEN: ${{ github.token }}
@@ -136,8 +158,21 @@ jobs:
             --pattern "fedramp-advisor-information.json" \
             --dir _site
 
-      - name: Validate downloaded JSON
-        run: jq empty _site/fedramp-advisor-information.json
+      - name: Add advisor logo to site directory
+        run: cp "$LOGO_FILE" _site/
+
+      - name: Validate downloaded JSON and logo reference
+        run: |
+          set -euo pipefail
+
+          jq empty _site/fedramp-advisor-information.json
+
+          logo_url="$(jq -er .logo _site/fedramp-advisor-information.json)"
+          logo_name="${logo_url##*/}"
+          if [ ! -f "_site/$logo_name" ]; then
+            echo "Logo referenced by JSON ($logo_url) is not present in _site/" >&2
+            exit 1
+          fi
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6

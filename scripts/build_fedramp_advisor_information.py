@@ -8,6 +8,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 METADATA_RE = re.compile(
@@ -15,10 +16,14 @@ METADATA_RE = re.compile(
     re.DOTALL,
 )
 REQUIRED_METADATA_FIELDS = (
+    "advisorName",
+    "logo",
     "serviceDescription",
     "contactInformation",
     "servicesOffered",
 )
+# Mirrors logoUri in fedramp-common-definitions-schema-2026-06-24.json.
+LOGO_URI_RE = re.compile(r"\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?)([?#].*)?$")
 
 
 def normalize_space(value: str) -> str:
@@ -121,6 +126,21 @@ def require_string(metadata: dict[str, Any], key: str) -> str:
     return normalize_space(value)
 
 
+def require_logo_uri(metadata: dict[str, Any], key: str) -> str:
+    value = require_string(metadata, key)
+    parts = urlsplit(value)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        raise ValueError(
+            f"README.md metadata field '{key}' must be an absolute http(s) URL"
+        )
+    if not LOGO_URI_RE.search(value):
+        raise ValueError(
+            f"README.md metadata field '{key}' must point to a PNG, JPEG, GIF, "
+            "SVG, WebP, ICO, BMP, or TIFF file"
+        )
+    return value
+
+
 def require_string_list(metadata: dict[str, Any], key: str) -> list[str]:
     value = metadata.get(key)
     if not isinstance(value, list) or not value:
@@ -203,10 +223,22 @@ def build_advisor_information(readme_path: Path) -> dict[str, object]:
     metadata = read_metadata(readme_path.read_text(encoding="utf-8"))
 
     document: dict[str, object] = {
-        "serviceDescription": require_string(metadata, "serviceDescription"),
-        "contactInformation": require_string_list(metadata, "contactInformation"),
-        "servicesOffered": parse_services_offered(metadata),
+        "advisorName": require_string(metadata, "advisorName"),
+        "logo": require_logo_uri(metadata, "logo"),
     }
+
+    if "a2laId" in metadata:
+        document["a2laId"] = require_string(metadata, "a2laId")
+
+    document.update(
+        {
+            "serviceDescription": require_string(metadata, "serviceDescription"),
+            "contactInformation": require_string_list(
+                metadata, "contactInformation"
+            ),
+            "servicesOffered": parse_services_offered(metadata),
+        }
+    )
 
     if "customerReferences" in metadata:
         document["customerReferences"] = require_string_list(
