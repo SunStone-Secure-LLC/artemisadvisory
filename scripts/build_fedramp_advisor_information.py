@@ -160,6 +160,55 @@ def require_string_list(metadata: dict[str, Any], key: str) -> list[str]:
     return strings
 
 
+CONTACT_FIELDS = (
+    "pointOfContactName",
+    "jobTitle",
+    "email",
+    "phone",
+    "companyWebsite",
+)
+
+
+def require_contact_information(metadata: dict[str, Any]) -> dict[str, str]:
+    """Mirrors the contactInformation object in the common-definitions schema."""
+    value = metadata.get("contactInformation")
+    if not isinstance(value, dict):
+        raise ValueError(
+            "README.md metadata field 'contactInformation' must be an object"
+        )
+
+    unexpected_keys = set(value) - set(CONTACT_FIELDS)
+    if unexpected_keys:
+        raise ValueError(
+            "README.md metadata field 'contactInformation' has unexpected "
+            f"key(s): {', '.join(sorted(unexpected_keys))}"
+        )
+
+    contact: dict[str, str] = {}
+    for field in CONTACT_FIELDS:
+        item = value.get(field)
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(
+                f"README.md metadata field 'contactInformation' must include "
+                f"a non-empty {field}"
+            )
+        contact[field] = normalize_space(item)
+
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", contact["email"]):
+        raise ValueError(
+            "README.md metadata field 'contactInformation' email must be "
+            "a valid email address"
+        )
+    parts = urlsplit(contact["companyWebsite"])
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        raise ValueError(
+            "README.md metadata field 'contactInformation' companyWebsite "
+            "must be an absolute http(s) URL"
+        )
+
+    return contact
+
+
 def normalize_service_description(value: str) -> str:
     return normalize_space(" ".join(part.strip() for part in value.split("|")))
 
@@ -233,9 +282,7 @@ def build_advisor_information(readme_path: Path) -> dict[str, object]:
     document.update(
         {
             "serviceDescription": require_string(metadata, "serviceDescription"),
-            "contactInformation": require_string_list(
-                metadata, "contactInformation"
-            ),
+            "contactInformation": require_contact_information(metadata),
             "servicesOffered": parse_services_offered(metadata),
         }
     )
